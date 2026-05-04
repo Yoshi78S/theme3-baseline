@@ -6,6 +6,11 @@ from model.bert4rec import BERT4RecModel
 from model.fmlprec import FMLPRecModel
 from model.duorec import DuoRecModel
 from model.fearec import FEARecModel
+from model.lrurec import LRURecModel
+from model.mamba4rec import Mamba4RecModel
+from model.icsrec import ICSRecModel
+from model.iclrec import ICLRecModel
+from model.sigma import SIGMAModel
 
 MODEL_DICT = {
     "bsarec": BSARecModel,
@@ -16,4 +21,9 @@ MODEL_DICT = {
     "fmlprec": FMLPRecModel,
     "duorec": DuoRecModel,
     "fearec": FEARecModel,
-    }
+    "lrurec": LRURecModel,
+    "mamba4rec": Mamba4RecModel,
+    "icsrec": ICSRecModel,
+    "iclrec": ICLRecModel,
+    "sigma": SIGMAModel,
+}

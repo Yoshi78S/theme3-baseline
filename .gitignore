@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Output (logs, checkpoints, plots, CSV — all regenerable)
+src/output/
+src/*.png
+src/benchmark_results.csv
+
+# Data (users should download separately)
+src/data/
+
+# Visualization data (917MB)
+src/visualize/sequence_output/
+
+# Reports (local analysis docs)
+benchmark_report.md
+
+# Environment files
+bsarec_env*.yaml

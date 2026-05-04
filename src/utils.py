@@ -124,6 +124,43 @@ def parse_args():
     elif args.model_type.lower() == 'gru4rec':
         parser.add_argument("--gru_hidden_size", default=64, type=int, help="hidden size of GRU")
 
+    elif args.model_type.lower() == 'mamba4rec':
+        parser.add_argument("--d_state", default=16, type=int, help="Mamba state dimension")
+        parser.add_argument("--d_conv", default=4, type=int, help="Mamba conv kernel size")
+        parser.add_argument("--expand", default=2, type=int, help="Mamba expansion factor")
+
+    elif args.model_type.lower() == 'sigma':
+        parser.add_argument("--d_state", default=32, type=int, help="Mamba state dimension")
+        parser.add_argument("--d_conv", default=4, type=int, help="Mamba conv kernel size")
+        parser.add_argument("--expand", default=2, type=int, help="Mamba expansion factor")
+
+    elif args.model_type.lower() == 'icsrec':
+        parser.add_argument("--temperature", default=1.0, type=float)
+        parser.add_argument("--sim", default="dot", type=str, help="dot or cos")
+        parser.add_argument("--intent_num", default=512, type=int)
+        parser.add_argument("--cl_mode", default="cf", type=str, help="c|f|cf")
+        parser.add_argument("--f_neg", action="store_true", help="False-negative masking")
+        parser.add_argument("--rec_weight", default=1.0, type=float)
+        parser.add_argument("--lambda_0", default=0.1, type=float, help="CICL weight")
+        parser.add_argument("--beta_0", default=0.1, type=float, help="FICL weight")
+
+    elif args.model_type.lower() == 'iclrec':
+        parser.add_argument("--temperature", default=1.0, type=float)
+        parser.add_argument("--sim", default="dot", type=str)
+        parser.add_argument("--num_intent_clusters", default="256", type=str,
+                            help="comma-separated cluster counts, e.g. '256' or '64,128,256'")
+        parser.add_argument("--contrast_type", default="Hybrid", type=str,
+                            help="InstanceCL | IntentCL | Hybrid")
+        parser.add_argument("--seq_representation_type", default="mean", type=str,
+                            help="mean | concatenate")
+        parser.add_argument("--warm_up_epoches", default=0, type=int)
+        parser.add_argument("--de_noise", action="store_true")
+        parser.add_argument("--rec_weight", default=1.0, type=float)
+        parser.add_argument("--cf_weight", default=0.1, type=float,
+                            help="InstanceCL weight")
+        parser.add_argument("--intent_cf_weight", default=0.3, type=float,
+                            help="IntentCL (PCL) weight")
+
     return parser.parse_args()
 
 class EarlyStopping:
@@ -143,6 +180,7 @@ class EarlyStopping:
         self.verbose = verbose
         self.counter = 0
         self.best_score = None
+        self.best_epoch = None
         self.early_stop = False
         self.delta = delta
         self.logger = logger
@@ -153,11 +191,12 @@ class EarlyStopping:
                 return False
         return True
 
-    def __call__(self, score, model):
+    def __call__(self, score, model, epoch=None):
         if self.best_score is None:
             self.best_score = score
             self.score_min = np.array([0]*len(score))
-            self.save_checkpoint(score, model)
+            self.best_epoch = epoch
+            self.save_checkpoint(score, model, epoch)
         elif self.compare(score):
             self.counter += 1
             self.logger.info(f'EarlyStopping counter: {self.counter} out of {self.patience}')
@@ -165,12 +204,14 @@ class EarlyStopping:
                 self.early_stop = True
         else:
             self.best_score = score
-            self.save_checkpoint(score, model)
+            self.best_epoch = epoch
+            self.save_checkpoint(score, model, epoch)
             self.counter = 0
 
-    def save_checkpoint(self, score, model):
+    def save_checkpoint(self, score, model, epoch=None):
         '''Saves model when validation loss decrease.'''
         if self.verbose:
-            self.logger.info(f'Validation score increased.  Saving model ...')
+            tag = f' (epoch {epoch})' if epoch is not None else ''
+            self.logger.info(f'Validation score increased{tag}.  Saving model ...')
         torch.save(model.state_dict(), self.checkpoint_path)
         self.score_min = score

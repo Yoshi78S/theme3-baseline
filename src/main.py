@@ -1,4 +1,5 @@
 import os
+import time
 import torch
 import numpy as np
 
@@ -32,6 +33,9 @@ def main():
     logger.info(model)
     trainer = Trainer(model, train_dataloader, eval_dataloader, test_dataloader, args, logger)
 
+    n_params = sum(p.nelement() for p in model.parameters())
+    logger.info(f"TIMING n_params {n_params}")
+
     args.valid_rating_matrix, args.test_rating_matrix = get_rating_matrix(args.data_name, seq_dic, max_item)
 
     if args.do_eval:
@@ -49,22 +53,39 @@ def main():
 
     else:
         early_stopping = EarlyStopping(args.checkpoint_path, logger=logger, patience=args.patience, verbose=True)
+        wall_start = time.perf_counter()
+        completed_epochs = 0
         for epoch in range(args.epochs):
 
             trainer.train(epoch)
             scores, _ = trainer.valid(epoch)
+            completed_epochs = epoch + 1
             # evaluate on MRR
-            early_stopping(np.array(scores[-1:]), trainer.model)
+            early_stopping(np.array(scores[-1:]), trainer.model, epoch=epoch)
             if early_stopping.early_stop:
                 logger.info("Early stopping")
                 break
+        wall_elapsed = time.perf_counter() - wall_start
+        logger.info(f"TIMING wall_train {wall_elapsed:.4f}s")
+        logger.info(f"TIMING epochs_run {completed_epochs}")
+
+        train_times = trainer.train_epoch_times
+        if train_times:
+            logger.info(f"TIMING train_epoch_mean {np.mean(train_times):.4f}s")
+            logger.info(f"TIMING train_epoch_sum {np.sum(train_times):.4f}s")
+        eval_times = trainer.eval_epoch_times
+        if eval_times:
+            logger.info(f"TIMING valid_epoch_mean {np.mean(eval_times):.4f}s")
 
         logger.info("---------------Test Score---------------")
         trainer.model.load_state_dict(torch.load(args.checkpoint_path))
-        scores, result_info = trainer.test(0)
+        best_epoch = early_stopping.best_epoch if early_stopping.best_epoch is not None else 0
+        logger.info(f"Loaded best-val checkpoint from epoch {best_epoch}")
+        scores, result_info = trainer.test(best_epoch)
 
     logger.info(args.train_name)
     logger.info(result_info)
 
 
-main()
+if __name__ == "__main__":
+    main()

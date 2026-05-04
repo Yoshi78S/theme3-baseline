@@ -1,3 +1,4 @@
+import time
 import tqdm
 import torch
 import numpy as np
@@ -29,16 +30,46 @@ class Trainer:
 
         self.logger.info(f"Total Parameters: {sum([p.nelement() for p in self.model.parameters()])}")
 
+        self.train_epoch_times = []
+        self.eval_epoch_times = []
+        self.test_time = None
+
+    def _sync(self):
+        if self.cuda_condition:
+            torch.cuda.synchronize()
+
     def train(self, epoch):
+        if hasattr(self.model, "on_epoch_start"):
+            self.model.on_epoch_start(epoch, self.train_dataloader, self.device)
+        self._sync()
+        t0 = time.perf_counter()
         self.iteration(epoch, self.train_dataloader, train=True)
+        self._sync()
+        elapsed = time.perf_counter() - t0
+        self.train_epoch_times.append(elapsed)
+        self.logger.info(f"TIMING train_epoch {epoch} {elapsed:.4f}s")
 
     def valid(self, epoch):
         self.args.train_matrix = self.args.valid_rating_matrix
-        return self.iteration(epoch, self.eval_dataloader, train=False)
+        self._sync()
+        t0 = time.perf_counter()
+        result = self.iteration(epoch, self.eval_dataloader, train=False)
+        self._sync()
+        elapsed = time.perf_counter() - t0
+        self.eval_epoch_times.append(elapsed)
+        self.logger.info(f"TIMING valid_epoch {epoch} {elapsed:.4f}s")
+        return result
 
     def test(self, epoch):
         self.args.train_matrix = self.args.test_rating_matrix
-        return self.iteration(epoch, self.test_dataloader, train=False)
+        self._sync()
+        t0 = time.perf_counter()
+        result = self.iteration(epoch, self.test_dataloader, train=False)
+        self._sync()
+        elapsed = time.perf_counter() - t0
+        self.test_time = elapsed
+        self.logger.info(f"TIMING test {elapsed:.4f}s")
+        return result
 
     def save(self, file_name):
         torch.save(self.model.cpu().state_dict(), file_name)
